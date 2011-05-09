@@ -76,6 +76,13 @@ def _Connection(host, port, reconnect, pool_size, db, lazy):
         reactor.connectTCP(host, port, factory)
     return (lazy is True) and factory.API or factory.deferred
 
+def _Unix_Connection(path, reconnect, pool_size, db, lazy):
+    factory = RedisFactory(pool_size, db, lazy)
+    factory.continueTrying = reconnect
+    for x in xrange(pool_size):
+        reactor.connectUNIX(path, factory)
+    return (lazy is True) and factory.API or factory.deferred
+
 def _ShardingConnection(hosts, reconnect, pool_size, db, lazy):
     err = "please use a list or tuple with host:port"
     if not isinstance(hosts, (types.ListType, types.TupleType)):
@@ -123,3 +130,16 @@ def lazyRedisShardingConnection(hosts, reconnect=True, db=0):
 
 def lazyRedisShardingConnectionPool(hosts, reconnect=True, pool_size=5, db=0):
     return _ShardingConnection(hosts, reconnect, pool_size, db=db, lazy=True)
+
+def RedisUnixConnection(path="/tmp/redis.sock", reconnect=True, db=0):
+    return _Unix_Connection(path, reconnect, pool_size=1, db=db, lazy=False)
+
+def lazyRedisUnixConnection(path="/tmp/redis.sock", reconnect=True, db=0):
+    return _Unix_Connection(path, reconnect, pool_size=1, db=db, lazy=True)
+
+def RedisUnixConnectionPool(path="/tmp/redis.sock", reconnect=True, pool_size=5, db=0):
+    return _Unix_Connection(path, reconnect, pool_size, db=db, lazy=False)
+
+def lazyRedisUnixConnectionPool(path="/tmp/redis.sock", reconnect=True, pool_size=5, db=0):
+    return _Unix_Connection(path, reconnect, pool_size, db=db, lazy=True)
+
