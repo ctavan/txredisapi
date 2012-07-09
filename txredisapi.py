@@ -102,7 +102,7 @@ class RedisProtocol(basic.LineReceiver, policies.TimeoutMixin):
 
         self.bulk_length = 0
         self.bulk_buffer = []
-        self.multi_bulk_length = []
+        self.multi_bulk_lengths = []
         self.multi_bulk_reply = []
         self.current_multi_bulk_reply = []
         self.multi_bulk_level = -1
@@ -200,18 +200,18 @@ class RedisProtocol(basic.LineReceiver, policies.TimeoutMixin):
             self.multi_bulk_reply = self.current_multi_bulk_reply
             self.current_multi_bulk_reply = []
             try:
-                self.multi_bulk_length.append(long(data))
+                self.multi_bulk_lengths.append(long(data))
             except (TypeError, ValueError):
                 self.replyReceived(InvalidResponse(
                     "Cannot convert multi-response header '%s' to integer" %
                     data))
-                self.multi_bulk_length.append(0)
+                self.multi_bulk_lengths.append(0)
                 return
-            if self.multi_bulk_length[self.multi_bulk_level] == -1:
+            if self.multi_bulk_lengths[self.multi_bulk_level] == -1:
                 self.current_multi_bulk_reply = None
                 self.multiBulkDataReceived()
                 return
-            elif self.multi_bulk_length[self.multi_bulk_level] == 0:
+            elif self.multi_bulk_lengths[self.multi_bulk_level] == 0:
                 self.multiBulkDataReceived()
 
     def rawDataReceived(self, data):
@@ -230,7 +230,7 @@ class RedisProtocol(basic.LineReceiver, policies.TimeoutMixin):
             self.bulk_buffer = []
             self.bulkDataReceived(bulk_buffer)
             while (self.multi_bulk_level >= 0
-                   and self.multi_bulk_length[self.multi_bulk_level] > 0
+                   and self.multi_bulk_lengths[self.multi_bulk_level] > 0
                    and rest):
                 if rest[0] == self.BULK:
                     idx = rest.find(self.delimiter)
@@ -269,14 +269,14 @@ class RedisProtocol(basic.LineReceiver, policies.TimeoutMixin):
                 except UnicodeDecodeError:
                     element = data
         if (self.multi_bulk_level >= 0
-            and self.multi_bulk_length[self.multi_bulk_level] > 0):
+            and self.multi_bulk_lengths[self.multi_bulk_level] > 0):
             self.handleMultiBulkElement(element)
         else:
             self.replyReceived(element)
 
     def handleMultiBulkElement(self, element):
         self.current_multi_bulk_reply.append(element)
-        self.multi_bulk_length[self.multi_bulk_level] -= 1
+        self.multi_bulk_lengths[self.multi_bulk_level] -= 1
 
         # Operations of a transaction are in the top-level of nested multi
         # bulk operations so multi_bulk_level == 0
@@ -284,7 +284,7 @@ class RedisProtocol(basic.LineReceiver, policies.TimeoutMixin):
             self.transactions -= 1
 
         # this level of multi bulk operations is done
-        if self.multi_bulk_length[self.multi_bulk_level] == 0:
+        if self.multi_bulk_lengths[self.multi_bulk_level] == 0:
             self.multiBulkDataReceived()
 
     def multiBulkDataReceived(self):
@@ -293,7 +293,7 @@ class RedisProtocol(basic.LineReceiver, policies.TimeoutMixin):
         """
 
         self.multi_bulk_level -= 1
-        self.multi_bulk_length.pop()
+        self.multi_bulk_lengths.pop()
 
         if self.multi_bulk_level >= 0:
             self.multi_bulk_reply.append(self.current_multi_bulk_reply)
@@ -303,9 +303,9 @@ class RedisProtocol(basic.LineReceiver, policies.TimeoutMixin):
             self.transactions -= 1
 
         # there are multi bulk levels left
-        if len(self.multi_bulk_length):
-            self.multi_bulk_length[self.multi_bulk_level] -= 1
-            if self.multi_bulk_length[self.multi_bulk_level] > 0:
+        if len(self.multi_bulk_lengths):
+            self.multi_bulk_lengths[self.multi_bulk_level] -= 1
+            if self.multi_bulk_lengths[self.multi_bulk_level] > 0:
                 return
             # This level of multi bulk results has been finished, call this
             # method again to process the level above
